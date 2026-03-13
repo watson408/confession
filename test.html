@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>致特别的你 ❤️</title>
+    <style>
+        /* --- 基础设置 --- */
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: #020205; /* 深邃夜空黑 */
+            font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            touch-action: none; /* 禁止手机端默认缩放 */
+        }
+
+        canvas {
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        /* --- 内容容器 --- */
+        .container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+            text-align: center;
+            color: #fff;
+            pointer-events: none; /* 让点击穿透到 Canvas，除非点在按钮上 */
+            width: 90%;
+            max-width: 600px;
+        }
+
+        /* --- 初始大爱心 --- */
+        .heart-icon {
+            font-size: 80px;
+            color: #ff4d6d;
+            animation: heartbeat 1.2s infinite;
+            cursor: pointer;
+            pointer-events: auto;
+            text-shadow: 0 0 20px rgba(255, 77, 109, 0.6);
+            transition: transform 0.3s;
+        }
+        
+        .heart-icon:hover {
+            transform: scale(1.1);
+        }
+
+        @keyframes heartbeat {
+            0% { transform: scale(1); }
+            14% { transform: scale(1.15); }
+            28% { transform: scale(1); }
+            42% { transform: scale(1.15); }
+            70% { transform: scale(1); }
+        }
+
+        /* --- 表白文字区域 (初始隐藏) --- */
+        .message-box {
+            display: none;
+            opacity: 0;
+            transition: opacity 1s ease;
+            pointer-events: auto;
+        }
+
+        .message-box.show {
+            display: block;
+            opacity: 1;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            background: linear-gradient(to right, #ff9a9e, #fad0c4, #ffd1ff);
+            -webkit-background-clip: text;
+            color: transparent;
+            text-shadow: 0 2px 10px rgba(255, 154, 158, 0.3);
+        }
+
+        p {
+            font-size: 1.1rem;
+            line-height: 1.6;
+            color: #e0e0e0;
+            margin-bottom: 30px;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 12px 30px;
+            background: linear-gradient(45deg, #ff4d6d, #ff8fa3);
+            color: white;
+            border-radius: 50px;
+            text-decoration: none;
+            font-weight: bold;
+            box-shadow: 0 4px 15px rgba(255, 77, 109, 0.4);
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+            cursor: pointer;
+            font-size: 1rem;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(255, 77, 109, 0.6);
+            background: transparent;
+            border-color: #ff4d6d;
+        }
+
+        .hint {
+            position: absolute;
+            bottom: 20%;
+            width: 100%;
+            text-align: center;
+            color: rgba(255,255,255,0.6);
+            font-size: 14px;
+            z-index: 5;
+            animation: fadeUp 2s infinite;
+            pointer-events: none;
+        }
+
+        @keyframes fadeUp {
+            0%, 100% { opacity: 0.4; transform: translateY(0); }
+            50% { opacity: 0.8; transform: translateY(-10px); }
+        }
+
+        /* 移动端适配 */
+        @media (max-width: 480px) {
+            h1 { font-size: 1.8rem; }
+            p { font-size: 0.95rem; }
+            .heart-icon { font-size: 60px; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 画布层：用于绘制烟花 -->
+    <canvas id="fireworksCanvas"></canvas>
+
+    <!-- 提示层 -->
+    <div class="hint" id="hintText">点击屏幕任意位置绽放烟花 💥</div>
+
+    <!-- 内容层 -->
+    <div class="container">
+        <!-- 阶段 1: 初始爱心 -->
+        <div id="startScreen">
+            <div class="heart-icon" onclick="startConfession()">❤️</div>
+            <p style="margin-top: 20px; font-size: 14px; opacity: 0.8;">点我开始</p>
+        </div>
+
+        <!-- 阶段 2: 表白内容 -->
+        <div id="messageScreen" class="message-box">
+            <h1>XXX (这里改名字)</h1>
+            <p>
+                遇见你是最美丽的意外，<br>
+                也是我此生最大的幸运。<br>
+                愿未来的每一天，<br>
+                都有烟花为你绽放，<br>
+                都有我陪在你身边。
+            </p>
+            <p style="font-size: 0.9em; color: #ff8fa3;">做我女朋友好吗？🌹</p>
+            
+            <div class="btn" onclick="launchBigFirework()">答应我！✨</div>
+            <div class="btn" style="background: transparent; border: 1px solid rgba(255,255,255,0.3); margin-left: 10px;" onclick="launchBigFirework()">再想想😜</div>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * 烟花特效核心逻辑
+         * 基于 Canvas 粒子系统
+         */
+        const canvas = document.getElementById('fireworksCanvas');
+        const ctx = canvas.getContext('2d');
+        let particles = [];
+        let fireworks = [];
+
+        // 调整画布大小
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // 工具函数：生成随机数
+        function random(min, max) {
+            return Math.random() * (max - min) + min;
+        }
+
+        // 粒子类
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.color = color;
+                // 爆炸速度
+                const angle = random(0, Math.PI * 2);
+                const speed = random(1, 6);
+                this.vx = Math.cos(angle) * speed;
+                this.vy = Math.sin(angle) * speed;
+                
+                this.alpha = 1; // 透明度
+                this.decay = random(0.015, 0.03); // 消失速度
+                this.gravity = 0.05; // 重力
+            }
+
+            update() {
+                this.vx *= 0.95; // 空气阻力
+                this.vy *= 0.95;
+                this.vy += this.gravity;
+                this.x += this.vx;
+                this.y += this.vy;
+                this.alpha -= this.decay;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = this.alpha;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, 2, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        // 烟花类 (升空阶段)
+        class Firework {
+            constructor(sx, sy, tx, ty) {
+                this.x = sx;
+                this.y = sy;
+                this.sx = sx;
+                this.sy = sy;
+                this.tx = tx;
+                this.ty = ty;
+                this.distanceToTarget = Math.hypot(tx - sx, ty - sy);
+                this.distanceTraveled = 0;
+                this.angle = Math.atan2(ty - sy, tx - sx);
+                this.speed = 2;
+                this.acceleration = 1.05;
+                this.brightness = random(50, 70);
+                this.targetRadius = 1;
+                this.color = `hsl(${random(0, 360)}, 100%, ${this.brightness}%)`;
+            }
+
+            update(index) {
+                this.speed *= this.acceleration;
+                const vx = Math.cos(this.angle) * this.speed;
+                const vy = Math.sin(this.angle) * this.speed;
+                
+                this.distanceTraveled = Math.hypot(this.x - this.sx, this.y - this.sy);
+
+                // 如果到达目标点（或超过），则爆炸
+                if (this.distanceTraveled >= this.distanceToTarget) {
+                    createParticles(this.tx, this.ty, this.color);
+                    fireworks.splice(index, 1);
+                } else {
+                    this.x += vx;
+                    this.y += vy;
+                }
+            }
+
+            draw() {
+                ctx.beginPath();
+                ctx.moveTo(this.x, this.y);
+                ctx.lineTo(this.x - Math.cos(this.angle) * 10, this.y - Math.sin(this.angle) * 10);
+                ctx.strokeStyle = this.color;
+                ctx.stroke();
+            }
+        }
+
+        // 创建爆炸粒子
+        function createParticles(x, y, color) {
+            const particleCount = 80; // 粒子数量
+            for (let i = 0; i < particleCount; i++) {
+                particles.push(new Particle(x, y, color));
+            }
+        }
+
+        // 动画循环
+        function loop() {
+            requestAnimationFrame(loop);
+            
+            // 制造拖尾效果
+            ctx.globalCompositeOperation = 'destination-out';
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.2)'; 
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.globalCompositeOperation = 'lighter';
+
+            // 更新烟花
+            for (let i = fireworks.length - 1; i >= 0; i--) {
+                fireworks[i].draw();
+                fireworks[i].update(i);
+            }
+
+            // 更新粒子
+            for (let i = particles.length - 1; i >= 0; i--) {
+                particles[i].draw();
+                particles[i].update();
+                if (particles[i].alpha <= 0) {
+                    particles.splice(i, 1);
+                }
+            }
+        }
+
+        // 启动动画循环
+        loop();
+
+        // --- 交互逻辑 ---
+
+        // 点击屏幕任意位置发射烟花
+        window.addEventListener('click', (e) => {
+            // 如果点击的是按钮，不发射普通烟花（避免遮挡），但按钮有自己的逻辑
+            if(e.target.tagName === 'BUTTON' || e.target.classList.contains('btn')) return;
+            
+            launchFirework(e.clientX, e.clientY);
+        });
+        
+        // 兼容触摸
+        window.addEventListener('touchstart', (e) => {
+             if(e.target.tagName === 'BUTTON' || e.target.classList.contains('btn')) return;
+             // 防止多点触控重复触发太多次，取第一个点
+             const touch = e.touches[0];
+             launchFirework(touch.clientX, touch.clientY);
+        }, {passive: true});
+
+        function launchFirework(x, y) {
+            // 从底部随机位置发射到点击位置
+            const startX = window.innerWidth / 2 + random(-100, 100);
+            const startY = window.innerHeight;
+            fireworks.push(new Firework(startX, startY, x, y));
+        }
+
+        // 自动连续放烟花 (背景氛围)
+        let autoFireworkInterval;
+        function startAutoFireworks() {
+            autoFireworkInterval = setInterval(() => {
+                const x = random(window.innerWidth * 0.2, window.innerWidth * 0.8);
+                const y = random(window.innerHeight * 0.2, window.innerHeight * 0.5);
+                launchFirework(x, y);
+            }, 800);
+        }
+
+        // --- 剧情逻辑 ---
+
+        function startConfession() {
+            const startScreen = document.getElementById('startScreen');
+            const messageScreen = document.getElementById('messageScreen');
+            const hintText = document.getElementById('hintText');
+
+            // 隐藏初始爱心
+            startScreen.style.display = 'none';
+            hintText.style.display = 'none';
+
+            // 显示表白文字
+            messageScreen.classList.add('show');
+
+            // 开始自动放烟花
+            startAutoFireworks();
+
+            // 立即放几个大的庆祝一下
+            setTimeout(() => launchBigFirework(), 100);
+            setTimeout(() => launchBigFirework(), 400);
+            setTimeout(() => launchBigFirework(), 800);
+        }
+
+        function launchBigFirework() {
+            // 在屏幕不同位置连续放多个大烟花
+            for(let i=0; i<5; i++) {
+                setTimeout(() => {
+                    const x = random(window.innerWidth * 0.1, window.innerWidth * 0.9);
+                    const y = random(window.innerHeight * 0.1, window.innerHeight * 0.6);
+                    launchFirework(x, y);
+                }, i * 200);
+            }
+        }
+
+    </script>
+</body>
+</html>
